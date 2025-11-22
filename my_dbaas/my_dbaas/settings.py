@@ -79,9 +79,9 @@ WSGI_APPLICATION = "my_dbaas.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "dbaas_management",
+        "NAME": "my_dbaas",
         "USER": "root",
-        "PASSWORD": "12345678",
+        "PASSWORD": "root",
         "HOST": "localhost",
         "PORT": "3306",
     }
@@ -143,6 +143,6 @@ CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:5500", "http://localhost:5500"]
 DBAAS_ADMIN_CONFIG = {
     "HOST": "localhost",
     "USER": "root",
-    "PASSWORD": "12345678",
+    "PASSWORD": "root",
     "PORT": 3306,
 }
