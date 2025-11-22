@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dashboard - Quản lý Database</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+  </head>
+  <body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4">
+      <div class="container">
+        <a class="navbar-brand" href="#">DBaaS System</a>
+        <div class="d-flex align-items-center">
+          <span id="user-display" class="text-light me-3 fw-bold">...</span>
+          <button onclick="logout()" class="btn btn-outline-light btn-sm">
+            Đăng xuất
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Tạo Database mới</h5>
+        </div>
+
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Tên Database:</label>
+              <input
+                type="text"
+                id="db_name"
+                class="form-control"
+                placeholder="Ví dụ: shop_giay_dep"
+              />
+              <small class="text-muted"
+                >Viết liền không dấu (ví dụ: my_db).</small
+              >
+            </div>
+
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Mật khẩu Database:</label>
+              <input
+                type="text"
+                id="db_pass"
+                class="form-control"
+                placeholder="Ít nhất 8 ký tự..."
+              />
+            </div>
+          </div>
+
+          <button
+            onclick="createDatabase()"
+            class="btn btn-success w-100 fw-bold"
+          >
+            <i class="fas fa-bolt"></i> Tạo ngay
+          </button>
+        </div>
+      </div>
+
+      <div id="result-area" class="alert alert-info d-none mb-4">
+        <h5>Thông báo:</h5>
+        <pre id="result-content"></pre>
+      </div>
+
+      <div class="card shadow-sm mt-4 mb-5">
+        <div
+          class="card-header bg-secondary text-white d-flex justify-content-between align-items-center"
+        >
+          <h5 class="mb-0">Danh sách Database của bạn</h5>
+          <button onclick="loadDatabases()" class="btn btn-sm btn-light">
+            <i class="fas fa-sync"></i> Làm mới
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+              <thead class="table-dark">
+                <tr>
+                  <th>Tên DB</th>
+                  <th>Username MySQL</th>
+                  <th>Password</th>
+                  <th>Ngày tạo</th>
+                  <th class="text-center">Hành động</th>
+                </tr>
+              </thead>
+              <tbody id="db-list-body">
+                <tr>
+                  <td colspan="5" class="text-center py-3">
+                    Đang tải dữ liệu...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- 1. Kiểm tra đăng nhập ---
+      const username = localStorage.getItem("username");
+      if (!username) {
+        window.location.href = "login.html";
+      } else {
+        document.getElementById("user-display").innerText =
+          "Xin chào, " + username;
+      }
+
+      // --- 2. Hàm TẠO Database (Đầy đủ) ---
+      async function createDatabase() {
+        const dbNameInput = document.getElementById("db_name");
+        const dbPassInput = document.getElementById("db_pass");
+        const resultArea = document.getElementById("result-area");
+        const resultContent = document.getElementById("result-content");
+
+        const dbName = dbNameInput.value;
+        const dbPass = dbPassInput.value;
+
+        if (!dbName) {
+          alert("Vui lòng nhập Tên Database!");
+          return;
+        }
+        if (dbPass.length < 8) {
+          alert("Mật khẩu phải dài hơn 8 ký tự!");
+          return;
+        }
+
+        // Hiển thị trạng thái đang xử lý...
+        resultArea.classList.remove("d-none");
+        resultArea.className = "alert alert-warning";
+        resultContent.innerText = "Đang xử lý, vui lòng đợi...";
+
+        try {
+          const response = await fetch("http://127.0.0.1:8000/api/provision/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ db_name: dbName, db_password: dbPass }),
+            credentials: "include",
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            resultArea.className = "alert alert-success";
+            resultContent.innerText =
+              "Thành công!\n" + JSON.stringify(data.db_info, null, 4);
+
+            // Xóa ô nhập liệu cho sạch
+            dbNameInput.value = "";
+            dbPassInput.value = "";
+
+            // Tải lại danh sách ngay lập tức
+            loadDatabases();
+          } else {
+            resultArea.className = "alert alert-danger";
+            resultContent.innerText =
+              "Lỗi: " + (data.detail || JSON.stringify(data));
+          }
+        } catch (error) {
+          console.error("Lỗi:", error);
+          resultArea.className = "alert alert-danger";
+          resultContent.innerText = "Lỗi kết nối Server!";
+        }
+      }
+
+      // --- 3. Hàm LẤY DANH SÁCH (Đầy đủ) ---
+      async function loadDatabases() {
+        try {
+          const response = await fetch(
+            "http://127.0.0.1:8000/api/my-databases/",
+            {
+              method: "GET",
+              credentials: "include",
+            }
+          );
+
+          const tbody = document.getElementById("db-list-body");
+          tbody.innerHTML = "";
+
+          if (!response.ok) {
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="text-danger text-center">Lỗi khi tải danh sách.</td></tr>';
+            return;
+          }
+
+          const data = await response.json();
+
+          if (data.length === 0) {
+            tbody.innerHTML =
+              '<tr><td colspan="5" class="text-center text-muted py-3">Bạn chưa tạo Database nào.</td></tr>';
+            return;
+          }
+
+          data.forEach((db) => {
+            const date = new Date(db.created_at).toLocaleString("vi-VN");
+
+            const row = `
+                    <tr>
+                        <td class="fw-bold text-primary align-middle">${db.db_name}</td>
+                        <td class="align-middle">${db.db_user}</td>
+                        <td class="align-middle"><code class="bg-light px-2 py-1 rounded border">${db.db_password}</code></td>
+                        <td class="align-middle">${date}</td>
+                        <td class="text-center align-middle">
+                            <button onclick="deleteDatabase(${db.id})" class="btn btn-danger btn-sm">
+                                <i class="fas fa-trash-alt"></i> Xóa
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            tbody.innerHTML += row;
+          });
+        } catch (error) {
+          console.error("Lỗi tải danh sách:", error);
+        }
+      }
+
+      // --- 4. Hàm XÓA Database (Mới) ---
+      async function deleteDatabase(id) {
+        if (
+          !confirm(
+            "CẢNH BÁO: Bạn có chắc chắn muốn xóa Database này không?\nDữ liệu sẽ bị mất vĩnh viễn!"
+          )
+        ) {
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `http://127.0.0.1:8000/api/delete-database/${id}/`,
+            {
+              method: "DELETE",
+              credentials: "include",
+            }
+          );
+
+          if (response.ok) {
+            alert("Đã xóa thành công!");
+            loadDatabases(); // Tải lại danh sách
+          } else {
+            const data = await response.json();
+            alert("Lỗi: " + (data.error || "Không thể xóa"));
+          }
+        } catch (error) {
+          alert("Lỗi kết nối Server!");
+        }
+      }
+
+      // --- 5. Hàm Đăng xuất ---
+      function logout() {
+        localStorage.removeItem("username");
+        window.location.href = "login.html";
+      }
+
+      // Chạy ngay khi vào trang
+      loadDatabases();
+    </script>
+  </body>
+</html>
