@@ -15,7 +15,7 @@
   <body class="bg-light">
     <nav class="navbar navbar-dark bg-dark mb-4">
       <div class="container">
-        <a class="navbar-brand" href="#">DBaaS System</a>
+        <a class="navbar-brand" href="#">DBaaS System (AWS Cloud)</a>
         <div class="d-flex align-items-center">
           <span id="user-display" class="text-light me-3 fw-bold">...</span>
           <button onclick="logout()" class="btn btn-outline-light btn-sm">
@@ -30,7 +30,6 @@
         <div class="card-header bg-primary text-white">
           <h5 class="mb-0">Tạo Database mới</h5>
         </div>
-
         <div class="card-body">
           <div class="row">
             <div class="col-md-6 mb-3">
@@ -41,11 +40,7 @@
                 class="form-control"
                 placeholder="Ví dụ: shop_giay_dep"
               />
-              <small class="text-muted"
-                >Viết liền không dấu (ví dụ: my_db).</small
-              >
             </div>
-
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Mật khẩu Database:</label>
               <input
@@ -56,7 +51,6 @@
               />
             </div>
           </div>
-
           <button
             onclick="createDatabase()"
             class="btn btn-success w-100 fw-bold"
@@ -85,6 +79,7 @@
             <table class="table table-striped table-hover mb-0">
               <thead class="table-dark">
                 <tr>
+                  <th>Host (IP)</th>
                   <th>Tên DB</th>
                   <th>Username MySQL</th>
                   <th>Password</th>
@@ -94,7 +89,7 @@
               </thead>
               <tbody id="db-list-body">
                 <tr>
-                  <td colspan="5" class="text-center py-3">
+                  <td colspan="6" class="text-center py-3">
                     Đang tải dữ liệu...
                   </td>
                 </tr>
@@ -106,16 +101,21 @@
     </div>
 
     <script>
-      // --- 1. Kiểm tra đăng nhập ---
+      // CẤU HÌNH IP AWS (Sửa 1 chỗ này là ăn cả bài)
+      const AWS_IP = "http://98.94.4.4:8000";
+
+      // 1. Kiểm tra đăng nhập
       const username = localStorage.getItem("username");
-      if (!username) {
+      const token = localStorage.getItem("token");
+
+      if (!username || !token) {
         window.location.href = "login.html";
       } else {
         document.getElementById("user-display").innerText =
           "Xin chào, " + username;
       }
 
-      // --- 2. Hàm TẠO Database (Đầy đủ) ---
+      // 2. Hàm TẠO Database
       async function createDatabase() {
         const dbNameInput = document.getElementById("db_name");
         const dbPassInput = document.getElementById("db_pass");
@@ -125,26 +125,18 @@
         const dbName = dbNameInput.value;
         const dbPass = dbPassInput.value;
 
-        if (!dbName) {
-          alert("Vui lòng nhập Tên Database!");
-          return;
-        }
-        if (dbPass.length < 8) {
-          alert("Mật khẩu phải dài hơn 8 ký tự!");
-          return;
-        }
-
-        // Hiển thị trạng thái đang xử lý...
         resultArea.classList.remove("d-none");
         resultArea.className = "alert alert-warning";
-        resultContent.innerText = "Đang xử lý, vui lòng đợi...";
+        resultContent.innerText = "Đang xử lý trên Cloud...";
 
         try {
-          const response = await fetch("http://127.0.0.1:8000/api/provision/", {
+          const response = await fetch(`${AWS_IP}/api/provision/`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Token " + token, // Dùng Token
+            },
             body: JSON.stringify({ db_name: dbName, db_password: dbPass }),
-            credentials: "include",
           });
 
           const data = await response.json();
@@ -153,42 +145,38 @@
             resultArea.className = "alert alert-success";
             resultContent.innerText =
               "Thành công!\n" + JSON.stringify(data.db_info, null, 4);
-
-            // Xóa ô nhập liệu cho sạch
             dbNameInput.value = "";
             dbPassInput.value = "";
-
-            // Tải lại danh sách ngay lập tức
-            loadDatabases();
+            loadDatabases(); // Tải lại danh sách
           } else {
             resultArea.className = "alert alert-danger";
             resultContent.innerText =
               "Lỗi: " + (data.detail || JSON.stringify(data));
           }
         } catch (error) {
-          console.error("Lỗi:", error);
           resultArea.className = "alert alert-danger";
           resultContent.innerText = "Lỗi kết nối Server!";
         }
       }
 
-      // --- 3. Hàm LẤY DANH SÁCH (Đầy đủ) ---
+      // 3. Hàm LẤY DANH SÁCH
       async function loadDatabases() {
         try {
-          const response = await fetch(
-            "http://127.0.0.1:8000/api/my-databases/",
-            {
-              method: "GET",
-              credentials: "include",
-            }
-          );
+          // Gọi API lấy danh sách
+          const response = await fetch(`${AWS_IP}/api/list-dbs/`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Token " + token, // Dùng Token
+            },
+          });
 
           const tbody = document.getElementById("db-list-body");
           tbody.innerHTML = "";
 
           if (!response.ok) {
             tbody.innerHTML =
-              '<tr><td colspan="5" class="text-danger text-center">Lỗi khi tải danh sách.</td></tr>';
+              '<tr><td colspan="6" class="text-danger text-center">Lỗi xác thực hoặc Server.</td></tr>';
             return;
           }
 
@@ -196,26 +184,35 @@
 
           if (data.length === 0) {
             tbody.innerHTML =
-              '<tr><td colspan="5" class="text-center text-muted py-3">Bạn chưa tạo Database nào.</td></tr>';
+              '<tr><td colspan="6" class="text-center text-muted py-3">Bạn chưa tạo Database nào.</td></tr>';
             return;
           }
 
           data.forEach((db) => {
             const date = new Date(db.created_at).toLocaleString("vi-VN");
 
+            // 👇 ĐOẠN FIX QUAN TRỌNG Ở ĐÂY:
+            // Nếu db.host không có dữ liệu (undefined/null) HOẶC là "localhost"
+            // Thì ép nó hiển thị IP AWS của bạn.
+            let displayHost = db.host;
+            if (!displayHost || displayHost === "localhost") {
+              displayHost = "98.94.4.4"; // ⚠️ Đảm bảo đây là IP AWS hiện tại của bạn
+            }
+
             const row = `
-                    <tr>
-                        <td class="fw-bold text-primary align-middle">${db.db_name}</td>
-                        <td class="align-middle">${db.db_user}</td>
-                        <td class="align-middle"><code class="bg-light px-2 py-1 rounded border">${db.db_password}</code></td>
-                        <td class="align-middle">${date}</td>
-                        <td class="text-center align-middle">
-                            <button onclick="deleteDatabase(${db.id})" class="btn btn-danger btn-sm">
-                                <i class="fas fa-trash-alt"></i> Xóa
-                            </button>
-                        </td>
-                    </tr>
-                `;
+          <tr>
+              <td class="fw-bold text-success align-middle">${displayHost}</td>
+              <td class="fw-bold text-primary align-middle">${db.db_name}</td>
+              <td class="align-middle">${db.db_user}</td>
+              <td class="align-middle"><code class="bg-light px-2 py-1 rounded border">${db.db_password}</code></td>
+              <td class="align-middle">${date}</td>
+              <td class="text-center align-middle">
+                  <button onclick="deleteDatabase(${db.id})" class="btn btn-danger btn-sm">
+                      <i class="fas fa-trash-alt"></i> Xóa
+                  </button>
+              </td>
+          </tr>
+      `;
             tbody.innerHTML += row;
           });
         } catch (error) {
@@ -223,44 +220,35 @@
         }
       }
 
-      // --- 4. Hàm XÓA Database (Mới) ---
+      // 4. Hàm XÓA Database
       async function deleteDatabase(id) {
-        if (
-          !confirm(
-            "CẢNH BÁO: Bạn có chắc chắn muốn xóa Database này không?\nDữ liệu sẽ bị mất vĩnh viễn!"
-          )
-        ) {
+        if (!confirm("CẢNH BÁO: Dữ liệu sẽ bị mất vĩnh viễn! Bạn chắc chứ?"))
           return;
-        }
 
         try {
-          const response = await fetch(
-            `http://127.0.0.1:8000/api/delete-database/${id}/`,
-            {
-              method: "DELETE",
-              credentials: "include",
-            }
-          );
+          const response = await fetch(`${AWS_IP}/api/delete-db/${id}/`, {
+            method: "DELETE",
+            headers: {
+              Authorization: "Token " + token, // Dùng Token
+            },
+          });
 
           if (response.ok) {
             alert("Đã xóa thành công!");
-            loadDatabases(); // Tải lại danh sách
+            loadDatabases();
           } else {
-            const data = await response.json();
-            alert("Lỗi: " + (data.error || "Không thể xóa"));
+            alert("Không thể xóa Database này.");
           }
         } catch (error) {
           alert("Lỗi kết nối Server!");
         }
       }
 
-      // --- 5. Hàm Đăng xuất ---
       function logout() {
-        localStorage.removeItem("username");
+        localStorage.clear();
         window.location.href = "login.html";
       }
 
-      // Chạy ngay khi vào trang
       loadDatabases();
     </script>
   </body>
